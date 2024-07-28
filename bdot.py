@@ -16,12 +16,14 @@ async def getOSMDataFromOverpass():
     query = f"""
     [out:json][timeout:25];
     area["name"="{areaName}"]->.searchArea;
-    way["highway"~"(footway|path|service)"](area.searchArea);
+    way["highway"~"(footway|path|service|track)"](area.searchArea);
     convert item ::=::,::geom=geom(),_osm_type=type();
     out geom;
     """
     with logDuration("download data from Overpass"):
-        response = await AsyncClient().post(DEFAULT_OVERPASS_URL, data=dict(data=query), timeout=30.0)
+        response = await AsyncClient().post(
+            DEFAULT_OVERPASS_URL, data=dict(data=query), timeout=30.0
+        )
         response.raise_for_status()
     with logDuration("parsing Overpass response"):
         return geojson.loads(response.text)["elements"]
@@ -63,8 +65,20 @@ async def main():
 
     with logDuration("reading BDOT data in GeoPackage format"):
         bdotData = geopandas.read_file("PL.PZGiK.330.BDOT10k.1465__OT_SKRP_L.gpkg")
+    bdotData = bdotData.drop(
+        columns=[
+            "WERSJA",
+            "POCZATEKWERSJIOBIEKTU",
+            "PRZESTRZENNAZW",
+            "LOKALNYID",
+            "KATEGORIAISTNIENIA",
+            "KODKARTO10K",
+            "TERYT",
+            "OZNACZENIEZMIANY",
+        ]
+    )
     with logDuration("converting BDOT data to GeoJSON"):
-        geojsonBdotDataString = bdotData.drop(columns=['WERSJA', 'POCZATEKWERSJIOBIEKTU']).to_json(to_wgs84=True)
+        geojsonBdotDataString = bdotData.to_json(to_wgs84=True)
     with logDuration("parsing BDOT GeoJSON"):
         geojsonBdotData = geojson.loads(geojsonBdotDataString)
     outputFeatures = []
