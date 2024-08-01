@@ -16,7 +16,7 @@ async def getOSMDataFromOverpass():
     query = f"""
     [out:json][timeout:25];
     area["name"="{areaName}"]->.searchArea;
-    way["highway"~"(footway|path|service|track)"](area.searchArea);
+    way["highway"~"(footway|path|service|track|pedestrian)"](area.searchArea);
     convert item ::=::,::geom=geom(),_osm_type=type();
     out geom;
     """
