@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from starsep_utils import logDuration
 from starsep_utils.overpass import DEFAULT_OVERPASS_URL
 
-H3_RESOLUTION = 11
+H3_RESOLUTION = 12
 
 
 async def getOSMDataFromOverpass():
@@ -59,10 +59,7 @@ def processOSMDataIntoH3Set(osmData) -> set[str]:
     return result
 
 
-async def main():
-    osmData = await getOSMDataFromOverpass()
-    osmH3Set = processOSMDataIntoH3Set(osmData)
-
+async def getBdotData():
     with logDuration("reading BDOT data in GeoPackage format"):
         bdotData = geopandas.read_file("PL.PZGiK.330.BDOT10k.1465__OT_SKRP_L.gpkg")
     bdotData = bdotData.drop(
@@ -81,6 +78,17 @@ async def main():
         geojsonBdotDataString = bdotData.to_json(to_wgs84=True)
     with logDuration("parsing BDOT GeoJSON"):
         geojsonBdotData = geojson.loads(geojsonBdotDataString)
+    return geojsonBdotData
+
+
+async def getOSMData():
+    osmData = await getOSMDataFromOverpass()
+    return processOSMDataIntoH3Set(osmData)
+
+
+async def main():
+    [osmH3Set, geojsonBdotData] = await asyncio.gather(getOSMData(), getBdotData())
+
     outputFeatures = []
     for feature in geojsonBdotData["features"]:
         if feature["geometry"]["type"] != "LineString":
