@@ -22,11 +22,21 @@ class Theme:
 
 THEMES = [
     Theme(
+        name="noise_barriers",
+        overpassWayQuery='wall=noise_barrier',
+        bdotLayer="OT_OIKM_L",
+        # TODO: Filter RODZAJ="ekran akustyczny" in BDOT
+    ),
+    Theme(
+        name="powerlines",
+        overpassWayQuery='power~"(line|minor_line)"',
+        bdotLayer="OT_SULN_L",
+    ),
+    Theme(
         name="footways",
         overpassWayQuery='"highway"~"(footway|path|service|track|pedestrian)"',
         bdotLayer="OT_SKRP_L",
     ),
-    Theme(name="powerlines", overpassWayQuery="power=line", bdotLayer="OT_SULN_L"),
 ]
 
 
