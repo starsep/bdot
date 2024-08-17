@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import dataclass
 
 import geojson
 import geopandas
@@ -7,16 +8,34 @@ import h3
 from httpx import AsyncClient
 from starsep_utils import logDuration
 from starsep_utils.overpass import DEFAULT_OVERPASS_URL
+from tqdm import tqdm
 
 H3_RESOLUTION = 12
 
 
-async def getOSMDataFromOverpass():
+@dataclass(frozen=True)
+class Theme:
+    name: str
+    overpassWayQuery: str
+    bdotLayer: str
+
+
+THEMES = [
+    Theme(
+        name="footways",
+        overpassWayQuery='"highway"~"(footway|path|service|track|pedestrian)"',
+        bdotLayer="OT_SKRP_L",
+    ),
+    Theme(name="powerlines", overpassWayQuery="power=line", bdotLayer="OT_SULN_L"),
+]
+
+
+async def getOSMDataFromOverpass(theme: Theme):
     areaName = "Warszawa"
     query = f"""
     [out:json][timeout:25];
     area["name"="{areaName}"]->.searchArea;
-    way["highway"~"(footway|path|service|track|pedestrian)"](area.searchArea);
+    way[{theme.overpassWayQuery}](area.searchArea);
     convert item ::=::,::geom=geom(),_osm_type=type();
     out geom;
     """
@@ -59,9 +78,11 @@ def processOSMDataIntoH3Set(osmData) -> set[str]:
     return result
 
 
-async def getBdotData():
+async def getBdotData(theme: Theme):
     with logDuration("reading BDOT data in GeoPackage format"):
-        bdotData = geopandas.read_file("PL.PZGiK.330.BDOT10k.1465__OT_SKRP_L.gpkg")
+        bdotData = geopandas.read_file(
+            f"PL.PZGiK.330.BDOT10k.1465__{theme.bdotLayer}.gpkg"
+        )
     bdotData = bdotData.drop(
         columns=[
             "WERSJA",
@@ -81,13 +102,15 @@ async def getBdotData():
     return geojsonBdotData
 
 
-async def getOSMData():
-    osmData = await getOSMDataFromOverpass()
+async def getOSMData(theme: Theme):
+    osmData = await getOSMDataFromOverpass(theme)
     return processOSMDataIntoH3Set(osmData)
 
 
-async def main():
-    [osmH3Set, geojsonBdotData] = await asyncio.gather(getOSMData(), getBdotData())
+async def processTheme(theme: Theme):
+    [osmH3Set, geojsonBdotData] = await asyncio.gather(
+        getOSMData(theme), getBdotData(theme)
+    )
 
     outputFeatures = []
     for feature in geojsonBdotData["features"]:
@@ -100,8 +123,13 @@ async def main():
         if len(shared) == 0:
             outputFeatures.append(feature)
     with logDuration("writing missing features to GeoJSON"):
-        with open("missing.geojson", "w") as f:
+        with open(f"missing-{theme.name}.geojson", "w") as f:
             geojson.dump(geojson.FeatureCollection(outputFeatures), f)
+
+
+async def main():
+    for theme in tqdm(THEMES):
+        await processTheme(theme)
 
 
 if __name__ == "__main__":
