@@ -22,8 +22,14 @@ class Theme:
 
 THEMES = [
     Theme(
+        name="roads",
+        overpassWayQuery='"highway"~"(service|primary|secondary|tertiary|motorway|residential|unclassified'
+        '|living_street|trunk|trunk_link|primary_link|secondary_link|tertiary_link|motorway_link|pedestrian|track)"',
+        bdotLayer="OT_SKJZ_L",
+    ),
+    Theme(
         name="noise_barriers",
-        overpassWayQuery='wall=noise_barrier',
+        overpassWayQuery="wall=noise_barrier",
         bdotLayer="OT_OIKM_L",
         # TODO: Filter RODZAJ="ekran akustyczny" in BDOT
     ),
