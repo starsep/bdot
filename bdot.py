@@ -171,20 +171,25 @@ async def downloadBdot(teryt: str):
 
 
 async def main():
-    terytCodes = [
-        "1465",  # Warszawa
-        "2261",  # Gdańsk
-        "1261",  # Kraków
-        "2214",  # Tczew
-        "0407",  # Inowrocław
-        "2611",  # Starachowice
-        "1438",  # Żyrardów
-        "1002",  # Kutno
-    ]
-    for teryt in tqdm(terytCodes):
+    terytCodes = {
+        "Warszawa": "1465",
+        "Gdańsk": "2261",
+        "Kraków": "1261",
+        "Tczew": "2214",
+        "Inowrocław": "0407",
+        "Starachowice": "2611",
+        "Żyrardów": "1438",
+        "Kutno": "1002",
+    }
+    for teryt in tqdm(terytCodes.values()):
         await downloadBdot(teryt)
         for theme in tqdm(THEMES):
             await processTheme(theme, teryt)
+    with Path("index.html").open("w") as f:
+        for name, teryt in terytCodes.items():
+            for theme in THEMES:
+                outputFile = missingDir / f"{theme.name}-{teryt}.geojson"
+                f.write(f"<a href='./{outputFile}' download>{name} {theme.name}</a><br/>\n")
 
 
 if __name__ == "__main__":
