@@ -1,6 +1,9 @@
+#!/usr/bin/env python3
 import asyncio
 import logging
+import zipfile
 from dataclasses import dataclass
+from pathlib import Path
 
 import geojson
 import geopandas
@@ -11,6 +14,11 @@ from starsep_utils.overpass import DEFAULT_OVERPASS_URL
 from tqdm import tqdm
 
 H3_RESOLUTION = 12
+
+missingDir = Path("missing")
+missingDir.mkdir(exist_ok=True)
+bdotDataDir = Path("bdot-data")
+bdotDataDir.mkdir(exist_ok=True)
 
 
 @dataclass(frozen=True)
@@ -46,11 +54,10 @@ THEMES = [
 ]
 
 
-async def getOSMDataFromOverpass(theme: Theme):
-    areaName = "Warszawa"
+async def getOSMDataFromOverpass(theme: Theme, teryt: str):
     query = f"""
     [out:json][timeout:25];
-    area["name"="{areaName}"]->.searchArea;
+    area["teryt:terc"="{teryt}"]->.searchArea;
     way[{theme.overpassWayQuery}](area.searchArea);
     convert item ::=::,::geom=geom(),_osm_type=type();
     out geom;
@@ -94,10 +101,10 @@ def processOSMDataIntoH3Set(osmData) -> set[str]:
     return result
 
 
-async def getBdotData(theme: Theme):
+async def getBdotData(theme: Theme, teryt: str):
     with logDuration("reading BDOT data in GeoPackage format"):
         bdotData = geopandas.read_file(
-            f"PL.PZGiK.330.BDOT10k.1465__{theme.bdotLayer}.gpkg"
+            list(bdotDataDir.glob(f"*.BDOT10k.{teryt}__{theme.bdotLayer}.gpkg"))[0]
         )
     bdotData = bdotData.drop(
         columns=[
@@ -118,14 +125,18 @@ async def getBdotData(theme: Theme):
     return geojsonBdotData
 
 
-async def getOSMData(theme: Theme):
-    osmData = await getOSMDataFromOverpass(theme)
+async def getOSMData(theme: Theme, teryt: str):
+    osmData = await getOSMDataFromOverpass(theme, teryt)
     return processOSMDataIntoH3Set(osmData)
 
 
-async def processTheme(theme: Theme):
+async def processTheme(theme: Theme, teryt: str):
+    outputFile = missingDir / f"{theme.name}-{teryt}.geojson"
+    if outputFile.exists():
+        return
+
     [osmH3Set, geojsonBdotData] = await asyncio.gather(
-        getOSMData(theme), getBdotData(theme)
+        getOSMData(theme, teryt), getBdotData(theme, teryt)
     )
 
     outputFeatures = []
@@ -139,13 +150,41 @@ async def processTheme(theme: Theme):
         if len(shared) == 0:
             outputFeatures.append(feature)
     with logDuration("writing missing features to GeoJSON"):
-        with open(f"missing-{theme.name}.geojson", "w") as f:
+        with outputFile.open("w") as f:
             geojson.dump(geojson.FeatureCollection(outputFeatures), f)
 
 
+async def downloadBdot(teryt: str):
+    url = f"https://opendata.geoportal.gov.pl/bdot10k/schemat2021/GPKG/{teryt[:2]}/{teryt}_GPKG.zip"
+    file = bdotDataDir / f"{teryt}_GPKG.zip"
+    if not file.exists():
+        logging.info(f"Downloading {url}")
+        async with AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            with file.open("wb") as f:
+                f.write(response.content)
+        with zipfile.ZipFile(file) as z:
+            z.extractall(bdotDataDir)
+    else:
+        logging.info(f"File {file} already exists")
+
+
 async def main():
-    for theme in tqdm(THEMES):
-        await processTheme(theme)
+    terytCodes = [
+        "1465",  # Warszawa
+        "2261",  # Gdańsk
+        "1261",  # Kraków
+        "2214",  # Tczew
+        "0407",  # Inowrocław
+        "2611",  # Starachowice
+        "1438",  # Żyrardów
+        "1002",  # Kutno
+    ]
+    for teryt in tqdm(terytCodes):
+        await downloadBdot(teryt)
+        for theme in tqdm(THEMES):
+            await processTheme(theme, teryt)
 
 
 if __name__ == "__main__":
