@@ -32,7 +32,7 @@ THEMES = [
     Theme(
         name="roads",
         overpassWayQuery='"highway"~"(service|primary|secondary|tertiary|motorway|residential|unclassified'
-        '|living_street|trunk|trunk_link|primary_link|secondary_link|tertiary_link|motorway_link|pedestrian|track)"',
+        '|living_street|trunk|trunk_link|primary_link|secondary_link|tertiary_link|motorway_link|pedestrian|track|path|footway)"',
         bdotLayer="OT_SKJZ_L",
     ),
     Theme(
@@ -48,7 +48,7 @@ THEMES = [
     ),
     Theme(
         name="footways",
-        overpassWayQuery='"highway"~"(footway|path|service|track|pedestrian)"',
+        overpassWayQuery='"highway"~"(footway|path|service|track|pedestrian|living_street)"',
         bdotLayer="OT_SKRP_L",
     ),
 ]
